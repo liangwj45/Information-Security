@@ -69,54 +69,13 @@ int DES::S_box[8][4][16] = {  // S 盒
     7, 4, 12, 5, 6, 11, 0, 14, 9, 2, 7, 11, 4, 1, 9, 12, 14, 2, 0, 6, 10, 13,
     15, 3, 5, 8, 2, 1, 14, 7, 4, 10, 8, 13, 15, 12, 9, 0, 3, 5, 6, 11};
 
-void DES::EncodeWithKeys(Bit text[64], Bit keys[16][48], Bit code[64]) {
-  memcpy(code, text, sizeof(Bit) * 64);
-  IPPermutation(code);
-  for (int i = 0; i < 16; i++) {
-    Iteration(code, code + 32, keys[i]);
-  }
-  WPermutation(code);
-  IPInversePermutation(code);
-}
-
-void DES::DecodeWithKeys(Bit code[64], Bit keys[16][48], Bit text[64]) {
-  memcpy(text, code, sizeof(Bit) * 64);
-  IPPermutation(text);
-  for (int i = 15; i >= 0; i--) {
-    Iteration(text, text + 32, keys[i]);
-  }
-  WPermutation(text);
-  IPInversePermutation(text);
-}
-
-void DES::Encode(Bit text[64], Bit key[64], Bit code[64]) {
-  Bit keys[16][48];
-  GenerateSecretKeys(key, keys);
-  EncodeWithKeys(text, keys, code);
-}
-
-void DES::Decode(Bit code[64], Bit key[64], Bit text[64]) {
-  Bit keys[16][48];
-  GenerateSecretKeys(key, keys);
-  DecodeWithKeys(code, keys, text);
-}
-
-void DES::TestEncode(const char text[8], const char key[8], char code[8]) {
-  Bit keys[16][48], btext[64], bcode[64];
-  GenerateSecretKeys(key, keys);
-  Char2Bit(text, btext);
-  EncodeWithKeys(btext, keys, bcode);
-  Bit2Char(bcode, code);
-}
-
-void DES::TestDecode(const char code[8], const char key[8], char text[8]) {
-  Bit keys[16][48], btext[64], bcode[64];
-  GenerateSecretKeys(key, keys);
-  Char2Bit(code, bcode);
-  DecodeWithKeys(bcode, keys, btext);
-  Bit2Char(btext, text);
-}
-
+/**
+ * @brief 测试用的接口——编码
+ *
+ * @param input 输入文件（明文）路径
+ * @param key 56位（7个字节）密钥
+ * @param output 输出文件（密文）路径
+ */
 void DES::EncodeWithFile(const char* input, const char* key,
                          const char* output) {
   FILE* in = fopen(input, "r");
@@ -137,6 +96,13 @@ void DES::EncodeWithFile(const char* input, const char* key,
   fclose(out);
 }
 
+/**
+ * @brief 测试用的接口——译码
+ *
+ * @param input 输入文件（密文）路径
+ * @param key 56位（7个字节）密钥
+ * @param output 输出文件（明文）路径
+ */
 void DES::DecodeWithFile(const char* input, const char* key,
                          const char* output) {
   FILE* in = fopen(input, "r");
@@ -157,12 +123,82 @@ void DES::DecodeWithFile(const char* input, const char* key,
   fclose(out);
 }
 
+/**
+ * @brief 编码
+ *
+ * @param text 64位明文输入
+ * @param key 56位密钥
+ * @param code 64位密文输出
+ */
+void DES::Encode(Bit text[64], Bit key[56], Bit code[64]) {
+  Bit keys[16][48];
+  GenerateSecretKeys(key, keys);
+  EncodeWithKeys(text, keys, code);
+}
+
+/**
+ * @brief 译码
+ *
+ * @param text 64位密文输出
+ * @param key 56位密钥
+ * @param code 64位明文输入
+ */
+void DES::Decode(Bit code[64], Bit key[56], Bit text[64]) {
+  Bit keys[16][48];
+  GenerateSecretKeys(key, keys);
+  DecodeWithKeys(code, keys, text);
+}
+
+/**
+ * @brief 编码
+ *
+ * @param text 64位明文输入
+ * @param key 16组48位子密钥
+ * @param code 64位密文输出
+ */
+void DES::EncodeWithKeys(Bit text[64], Bit keys[16][48], Bit code[64]) {
+  memcpy(code, text, sizeof(Bit) * 64);
+  IPPermutation(code);
+  for (int i = 0; i < 16; i++) {
+    Iteration(code, code + 32, keys[i]);
+  }
+  WPermutation(code);
+  IPInversePermutation(code);
+}
+
+/**
+ * @brief 译码
+ *
+ * @param text 64位密文输出
+ * @param key 16组48位子密钥
+ * @param code 64位明文输入
+ */
+void DES::DecodeWithKeys(Bit code[64], Bit keys[16][48], Bit text[64]) {
+  memcpy(text, code, sizeof(Bit) * 64);
+  IPPermutation(text);
+  for (int i = 15; i >= 0; i--) {
+    Iteration(text, text + 32, keys[i]);
+  }
+  WPermutation(text);
+  IPInversePermutation(text);
+}
+
+/**
+ * @brief 读文件，一次读取64位
+ *
+ * @param in 输入文件路径
+ * @param text 读取结果输出位置
+ * @param type 执行类型（编码/译码过程）
+ * @param end 读取结束标志
+ */
 void DES::Read64Bit(FILE* in, Bit text[64], TYPE type, bool& end) {
   end = false;
 
   char ctext[8], c;
+  // 读取并转成位数组
   for (int i = 0; i < 8; i++) {
     if (fscanf(in, "%c", &c) <= 0) {
+      // 字节填补
       for (int j = i; j < 8; j++) {
         ctext[j] = 8 - i + '0';
         end = true;
@@ -172,27 +208,37 @@ void DES::Read64Bit(FILE* in, Bit text[64], TYPE type, bool& end) {
     ctext[i] = c;
   }
 
+  // 判断是否已读完
   if (type == TYPE::DECODER) {
     if (fscanf(in, "%c", &c) <= 0) {
       end = true;
     } else {
+      // 文件指针回退
       fseek(in, -1, SEEK_CUR);
     }
   }
 
-  Char2Bit(ctext, text);
+  Bytes2Bits(ctext, text);
 }
 
+/**
+ * @brief 写文件，一次写64位
+ *
+ * @param out 输出文件路径
+ * @param text 需要写的内容
+ * @param end 用于判断是否是最后一次要写，译码最后一次要去掉填补内容
+ */
 void DES::Write64Bit(FILE* out, Bit text[64], bool end) {
   char ctext[8];
-  Bit2Char(text, ctext);
+  Bits2Bytes(text, ctext);
+  // 去除文件末尾填补的字节
   int n = end ? 8 - ctext[7] + '0' : 8;
   for (int i = 0; i < n; i++) {
     fprintf(out, "%c", ctext[i]);
   }
 }
 
-// IP 置换
+// IP 初始置换
 void DES::IPPermutation(Bit M[64]) {
   Bit tmp[64];
   for (int i = 0; i < 64; i++) {
@@ -239,38 +285,7 @@ void DES::Feistel(Bit R[32], Bit K[48], Bit out[32]) {
   }
 }
 
-// 64位密钥生成16个48位的子密钥
-void DES::GenerateSecretKeys(Bit K64[64], Bit K48[16][48]) {
-  Bit L[56], R[56];
-  for (int i = 0; i < 28; i++) {
-    L[i + 28] = L[i] = K64[PC1_table[i] - 1];
-    R[i + 28] = R[i] = K64[PC1_table[i + 28] - 1];
-  }
-
-  // 以记录偏移量的方式代替偏移操作
-  int st = 0;
-  for (int i = 0; i < 16; i++) {
-    st += Shift[i];
-    for (int j = 0; j < 48; j++) {
-      if (PC2_table[j] < 28) {
-        K48[i][j] = L[PC2_table[j] + st - 1];
-      } else {
-        K48[i][j] = R[PC2_table[j] - 29 + st];
-      }
-    }
-  }
-}
-
-// 8个字符的字符串密钥生成16个48位的子密钥
-void DES::GenerateSecretKeys(const char K[8], Bit K48[16][48]) {
-  Bit K64[64];
-  for (int i = 0; i < 8; i++) {
-    Char2Bit(K[i], K64 + i * 8);
-  }
-  GenerateSecretKeys(K64, K48);
-}
-
-// W 置换
+// W 交换置换
 void DES::WPermutation(Bit M[64]) {
   Bit tmp[32];
   memcpy(tmp, M, sizeof(Bit) * 32);
@@ -287,30 +302,61 @@ void DES::IPInversePermutation(Bit M[64]) {
   memcpy(M, tmp, sizeof(Bit) * 64);
 }
 
-// 二进制数组转字符
-void DES::Bit2Char(const Bit bits[64], char chars[8]) {
-  for (int i = 0; i < 8; i++) {
-    Bit2Char(bits + i * 8, chars[i]);
+// 56位密钥生成16个48位的子密钥
+void DES::GenerateSecretKeys(Bit K56[56], Bit K48[16][48]) {
+  Bit L[56], R[56];
+  for (int i = 0; i < 28; i++) {
+    L[i + 28] = L[i] = K56[PC1_table[i] - 1];
+    R[i + 28] = R[i] = K56[PC1_table[i + 28] - 1];
+  }
+
+  // 以记录偏移量的方式代替偏移操作
+  int st = 0;
+  for (int i = 0; i < 16; i++) {
+    st += Shift[i];
+    for (int j = 0; j < 48; j++) {
+      if (PC2_table[j] < 28) {
+        K48[i][j] = L[PC2_table[j] + st - 1];
+      } else {
+        K48[i][j] = R[PC2_table[j] - 29 + st];
+      }
+    }
   }
 }
 
-// 二进制数组转字符
-void DES::Bit2Char(const Bit bits[8], char& c) {
+// 7个字节的字符串密钥生成16个48位的子密钥
+void DES::GenerateSecretKeys(const char K[7], Bit K48[16][48]) {
+  Bit K56[56];
+  for (int i = 0; i < 7; i++) {
+    Byte2Bits(K[i], K56 + i * 8);
+  }
+  GenerateSecretKeys(K56, K48);
+}
+
+// 位数组转字节
+void DES::Bits2Bytes(const Bit bits[64], char chars[8]) {
+  for (int i = 0; i < 8; i++) {
+    Bits2Byte(bits + i * 8, chars[i]);
+  }
+}
+
+// 位数组转字节
+void DES::Bits2Byte(const Bit bits[8], char& c) {
   c = '\0';
   for (int i = 0; i < 8; i++) {
     c |= (bits[i] << i);
   }
 }
 
-// 字符转二进制数组
-void DES::Char2Bit(const char chars[8], Bit bits[64]) {
+// 字节转位数组
+void DES::Bytes2Bits(const char chars[8], Bit bits[64]) {
   for (int i = 0; i < 8; i++) {
-    Char2Bit(chars[i], bits + 8 * i);
+    Byte2Bits(chars[i], bits + 8 * i);
   }
 }
 
-// 字符转二进制数组
-void DES::Char2Bit(char c, Bit bits[8]) {
+// 字节转位数组
+void DES::Byte2Bits(char c, Bit bits[8]) {
   for (int j = 0; j < 8; j++) {
     bits[j] = (c >> j & 1);
   }
