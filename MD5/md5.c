@@ -18,31 +18,31 @@ const uint32_t T[64] = {
     0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391};
 
 // 各次迭代运算 (1..64) 采用的左循环移位的 s 值
-const uint32_t s[] = {7,  12, 17, 22, 7,  12, 17, 22, 7,  12, 17, 22, 7,
-                      12, 17, 22, 5,  9,  14, 20, 5,  9,  14, 20, 5,  9,
-                      14, 20, 5,  9,  14, 20, 4,  11, 16, 23, 4,  11, 16,
-                      23, 4,  11, 16, 23, 4,  11, 16, 23, 6,  10, 15, 21,
-                      6,  10, 15, 21, 6,  10, 15, 21, 6,  10, 15, 21};
+const uint32_t s[64] = {7,  12, 17, 22, 7,  12, 17, 22, 7,  12, 17, 22, 7,
+                        12, 17, 22, 5,  9,  14, 20, 5,  9,  14, 20, 5,  9,
+                        14, 20, 5,  9,  14, 20, 4,  11, 16, 23, 4,  11, 16,
+                        23, 4,  11, 16, 23, 4,  11, 16, 23, 6,  10, 15, 21,
+                        6,  10, 15, 21, 6,  10, 15, 21, 6,  10, 15, 21};
 
 // 各次迭代运算 (1..64) 采用的 X[k] 的值
-const int xk[64] = {0,  1,  2,  3, 4, 5,  6,  7,  8,  9,  10, 11, 12,
-                    13, 14, 15, 1, 6, 11, 0,  5,  10, 15, 4,  9,  14,
-                    3,  8,  13, 2, 7, 12, 5,  8,  11, 14, 1,  4,  7,
-                    10, 13, 0,  3, 6, 9,  12, 15, 2,  0,  7,  14, 5,
-                    12, 3,  10, 1, 8, 15, 6,  13, 4,  11, 2,  9};
-
-typedef uint32_t (*g_t)(uint32_t b, uint32_t c, uint32_t d);
-uint32_t F(uint32_t b, uint32_t c, uint32_t d) { return (b & c) | ((~b) & d); }
-uint32_t G(uint32_t b, uint32_t c, uint32_t d) { return (d & b) | ((~d) & c); }
-uint32_t H(uint32_t b, uint32_t c, uint32_t d) { return b ^ c ^ d; }
-uint32_t I(uint32_t b, uint32_t c, uint32_t d) { return c ^ (b | (~d)); }
-g_t gs[] = {F, G, H, I};  // 轮函数
+const uint8_t xk[64] = {0,  1,  2,  3, 4, 5,  6,  7,  8,  9,  10, 11, 12,
+                        13, 14, 15, 1, 6, 11, 0,  5,  10, 15, 4,  9,  14,
+                        3,  8,  13, 2, 7, 12, 5,  8,  11, 14, 1,  4,  7,
+                        10, 13, 0,  3, 6, 9,  12, 15, 2,  0,  7,  14, 5,
+                        12, 3,  10, 1, 8, 15, 6,  13, 4,  11, 2,  9};
 
 void MD5(const uint8_t* src, size_t len, uint8_t* out);
 void HMD5(uint32_t CV[4], uint8_t Y[64]);
 uint32_t left_rotate(uint32_t a, uint8_t s);
 uint32_t to_int32(const uint8_t* bytes);
 void to_bytes(uint32_t val, uint8_t* bytes);
+
+typedef uint32_t (*g_t)(uint32_t b, uint32_t c, uint32_t d);
+uint32_t F(uint32_t b, uint32_t c, uint32_t d);
+uint32_t G(uint32_t b, uint32_t c, uint32_t d);
+uint32_t H(uint32_t b, uint32_t c, uint32_t d);
+uint32_t I(uint32_t b, uint32_t c, uint32_t d);
+g_t gs[] = {F, G, H, I};  // 轮函数
 
 int main(int argc, const char** argv) {
   uint8_t out[16], *msg = argc > 1 ? (uint8_t*)argv[1] : (uint8_t*)"liang";
@@ -65,18 +65,17 @@ int main(int argc, const char** argv) {
  * @param out 算法结果输出位置
  */
 void MD5(const uint8_t* src, size_t len, uint8_t* out) {
-  int i, plen = (512 + 448 - len * 8) % 512 / 8;
-
   // 复制和填充
-  uint8_t* msg = (uint8_t*)malloc(len + plen + 8);
-  memcpy(msg, src, len);
-  msg[len] = 0x80;
-  for (i = len + 1; i < len + plen; i++) msg[i] = 0;
+  int i, plen = (512 + 448 - len * 8) % 512 / 8;      // 填充的字节数
+  uint8_t* msg = (uint8_t*)malloc(len + plen + 8);    // 填充后的消息
+  memcpy(msg, src, len);                              // 拷贝消息
+  msg[len] = 0x80;                                    // 填充 1000,0000
+  for (i = len + 1; i < len + plen; i++) msg[i] = 0;  // 填充 00...00
 
   // 添加消息长度
-  to_bytes(len * 8, msg + len + plen);
-  to_bytes(len >> 29, msg + len + plen + 4);
-  len = len + plen + 8;
+  to_bytes(len * 8, msg + len + plen);        // 低32位
+  to_bytes(len >> 29, msg + len + plen + 4);  // 高32位
+  len = len + plen + 8;                       // 更新长度
 
   // MD5压缩函数
   uint32_t CV[] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
@@ -131,18 +130,20 @@ void HMD5(uint32_t CV[4], uint8_t Y[64]) {
   CV[3] += d;
 }
 
+uint32_t F(uint32_t b, uint32_t c, uint32_t d) { return (b & c) | ((~b) & d); }
+uint32_t G(uint32_t b, uint32_t c, uint32_t d) { return (d & b) | ((~d) & c); }
+uint32_t H(uint32_t b, uint32_t c, uint32_t d) { return b ^ c ^ d; }
+uint32_t I(uint32_t b, uint32_t c, uint32_t d) { return c ^ (b | (~d)); }
+uint32_t left_rotate(uint32_t a, uint8_t s) { return a << s | a >> (32 - s); }
+
+uint32_t to_int32(const uint8_t* bytes) {
+  return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
+         ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
+}
+
 void to_bytes(uint32_t val, uint8_t* bytes) {
   bytes[0] = (uint8_t)val;
   bytes[1] = (uint8_t)(val >> 8);
   bytes[2] = (uint8_t)(val >> 16);
   bytes[3] = (uint8_t)(val >> 24);
-}  // 小端存储
-
-uint32_t to_int32(const uint8_t* bytes) {
-  return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
-         ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
-}  // 转数值
-
-uint32_t left_rotate(uint32_t a, uint8_t s) {
-  return a << s | a >> (32 - s);
-}  // 循环左移
+}
