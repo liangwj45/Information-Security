@@ -354,5 +354,19 @@ void to_bytes(uint32_t val, uint8_t* bytes) {
 }
 ```
 
+## 编译运行结果
 
+- 编译
+
+```bash
+gcc md5.c -o md5
+```
+
+- 运行
+
+```bash
+./md5 "string"
+```
+
+![](./img/5.png)
 
